@@ -1,9 +1,13 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include "FileSystemTreeModel.h"
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+
+    qmlRegisterType<FileSystemTreeModel>("SkyProj", 1, 0, "FileSystemTreeModel");
 
     QQmlApplicationEngine engine;
     QObject::connect(

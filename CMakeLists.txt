@@ -17,6 +17,9 @@ qt_add_qml_module(appProjectManager
     VERSION 1.0
     QML_FILES
         Main.qml
+        SOURCES
+        SOURCES filesystemtreemodel.h filesystemtreemodel.cpp
+        SOURCES treeitem.h treeitem.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
