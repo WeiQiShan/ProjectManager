@@ -1,25 +1,14 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Dialogs
-// import Qt.labs.folderlistview 1.0
+import Qt.labs.platform 1.1
 import SkyProj 1.0
 
 ApplicationWindow {
-    id: rootWindow
-    visible: true
     width: 800
     height: 600
-    title: "SkyProj Manager - Qt 6.7"
-
-    function getLocalPath(url) {
-        let path = url.toString()
-        if (Qt.platform.os === "windows") {
-            return path.replace(/^file:\/{3}/, "")
-        } else {
-            return path.replace(/^file:\/{2}/, "")
-        }
-    }
+    visible: true
+    title: "SkyProj Manager"
 
     FileSystemTreeModel {
         id: fsModel
@@ -31,13 +20,16 @@ ApplicationWindow {
 
         RowLayout {
             Button {
-                text: "选择文件夹"
+                text: "打开文件夹"
                 onClicked: folderDialog.open()
             }
-
             Button {
-                text: "导出项目"
-                onClicked: exportDialog.open()
+                text: "打开项目"
+                onClicked: projectOpenDialog.open()
+            }
+            Button {
+                text: "保存项目"
+                onClicked: projectSaveDialog.open()
             }
         }
 
@@ -45,84 +37,109 @@ ApplicationWindow {
             id: treeView
             Layout.fillWidth: true
             Layout.fillHeight: true
+            clip: true
+
+            // The model needs to be a QAbstractItemModel
             model: fsModel
+            selectionModel: ItemSelectionModel {
+                model: treeView.model
+            }
 
-            delegate: TreeViewDelegate {
-                required property var model
+            delegate: Item {
+                implicitWidth: padding + label.x + label.implicitWidth + padding
+                implicitHeight: label.implicitHeight * 1.5
+
+                readonly property real indentation: 20
+                readonly property real padding: 5
+
+                // Assigned to by TreeView:
+                required property TreeView treeView
+                required property bool isTreeNode
+                required property bool expanded
+                required property bool hasChildren
+                required property int depth
                 required property int row
+                required property int column
+                required property bool current
 
-                contentItem: Row {
-                    spacing: 5
-                    Image {
-                        source: model.isDirectory ? "qrc:/folder.svg" : "qrc:/file.svg"
-                        width: 20
-                        height: 20
-                    }
-                    Text {
-                        text: model.name
-                        color: model.isDirectory ? "blue" : "black"
+                Text {
+                    text: model.name ? model.name : "No data" // 显示模型的名称
+                }
+
+                // Rotate indicator when expanded by the user
+                // (requires TreeView to have a selectionModel)
+                // 展开/折叠动画
+                property Animation indicatorAnimation: NumberAnimation {
+                    target: indicator
+                    property: "rotation"
+                    from: expanded ? 0 : 90
+                    to: expanded ? 90 : 0
+                    duration: 100
+                    easing.type: Easing.OutQuart
+                }
+                TableView.onPooled: indicatorAnimation.complete()
+                TableView.onReused: if (current)
+                                        indicatorAnimation.start()
+                onExpandedChanged: indicator.rotation = expanded ? 90 : 0
+                // 背景高亮
+                Rectangle {
+                    id: background
+                    anchors.fill: parent
+                    color: row === treeView.currentRow ? palette.highlight : "black"
+                    opacity: (treeView.alternatingRows
+                              && row % 2 !== 0) ? 0.3 : 0.1
+                }
+                // 展开/折叠指示箭头
+                Label {
+                    id: indicator
+                    x: padding + (depth * indentation)
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: isTreeNode && hasChildren
+                    text: "▶"
+
+                    TapHandler {
+                        onSingleTapped: {
+                            let index = treeView.index(row, column)
+                            treeView.selectionModel.setCurrentIndex(
+                                        index, ItemSelectionModel.NoUpdate)
+                            treeView.toggleExpanded(row)
+                        }
                     }
                 }
 
-                onDoubleClicked: {
-                    if (model.isDirectory) {
-                        if (treeView.isExpanded(row)) {
-                            treeView.collapse(row)
-                        } else {
-                            treeView.expand(row)
-                        }
-                    }
+                Label {
+                    id: label
+                    x: padding + (isTreeNode ? (depth + 1) * indentation : 0)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - padding - x
+                    clip: true
+                    text: model.name
                 }
             }
         }
     }
 
-    FileDialog {
+    FolderDialog {
         id: folderDialog
-        title: "选择包含OPGR文件的文件夹"
-        fileMode: FileDialog.OpenFolder
-        options: FileDialog.ShowDirsOnly
-        currentFolder: StandardPath.standardLocations(StandardPath.Documents)[0]
-
-        onAccepted: {
-            const path = getLocalPath(currentFolder)
-            console.log("Loading directory:", path)
-            fsModel.loadDirectory(path)
-        }
+        onAccepted: fsModel.loadDirectory(getLocalPath(currentFolder))
     }
 
     FileDialog {
-        id: exportDialog
-        title: "保存项目文件"
-        fileMode: FileDialog.SaveFile
-        defaultSuffix: "skyproj"
+        id: projectOpenDialog
         nameFilters: ["SkyProj Files (*.skyproj)"]
-        currentFolder: folderDialog.currentFolder
-
-        onAccepted: {
-            const filePath = getLocalPath(selectedFile)
-            console.log("Exporting to:", filePath)
-            const success = fsModel.exportProject(filePath)
-            showExportResult(success, filePath)
-        }
+        onAccepted: fsModel.loadProject(selectedFile)
     }
 
-    Dialog {
-        id: resultDialog
-        title: "操作结果"
-        anchors.centerIn: parent
-        standardButtons: Dialog.Ok
-        property string message: ""
-
-        Label {
-            text: resultDialog.message
-            wrapMode: Text.Wrap
-        }
+    FileDialog {
+        id: projectSaveDialog
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["SkyProj Files (*.skyproj)"]
+        defaultSuffix: "skyproj"
+        onAccepted: fsModel.saveProject(selectedFile)
     }
 
-    function showExportResult(success, path) {
-        resultDialog.message = success ? qsTr("导出成功！\n路径：%1").arg(path) : qsTr(
-                                             "导出失败！请检查：\n1. 文件是否被占用\n2. 是否有写入权限")
-        resultDialog.open()
+    function getLocalPath(url) {
+        // console.log(url.toString().replace(/^file:\/{3}/, ""))
+        return url.toString().replace(/^file:\/{3}/, "")
     }
 }

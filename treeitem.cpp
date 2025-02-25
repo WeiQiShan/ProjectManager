@@ -2,7 +2,10 @@
 
 // ================= TreeItem 实现 =================
 TreeItem::TreeItem(const QString &name, const QString &path, bool isDir, TreeItem *parent)
-    : m_parent(parent), m_name(name), m_path(path), m_isDir(isDir) {}
+    : m_parent(parent), m_name(name), m_path(path), m_isDir(isDir) {
+
+    m_depth = parent ? parent->m_depth + 1 : 0;
+}
 
 TreeItem::~TreeItem() {
     qDeleteAll(m_children);
@@ -20,6 +23,11 @@ TreeItem *TreeItem::child(int row) {
 
 int TreeItem::childCount() const {
     return m_children.size();
+}
+
+bool TreeItem::hasChildren() const
+{
+    return !m_children.isEmpty();
 }
 
 QString TreeItem::name() const {
@@ -42,4 +50,9 @@ int TreeItem::row() const {
 
 TreeItem *TreeItem::parentItem() {
     return m_parent;
+}
+
+int TreeItem::depth() const
+{
+    return m_depth;
 }

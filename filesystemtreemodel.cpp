@@ -1,158 +1,229 @@
-#include "FileSystemTreeModel.h"
-#include <QXmlStreamWriter>
-#include <QFile>
-#include <QFileInfo>
-#include <QStack>
+    #include "FileSystemTreeModel.h"
+    #include <QXmlStreamWriter>
+    #include <QFile>
+    #include <QFileInfo>
+    #include <QStack>
 
-// ================= 模型实现 =================
-FileSystemTreeModel::FileSystemTreeModel(QObject *parent)
-    : QAbstractItemModel(parent),
-    m_rootItem(new TreeItem("Root", "", true)) {}
+    // ================= 模型实现 =================
+    FileSystemTreeModel::FileSystemTreeModel(QObject *parent)
+        : QAbstractItemModel(parent),
+        m_rootItem(new TreeItem("Root", "", true)) {}
 
-FileSystemTreeModel::~FileSystemTreeModel() {
-    delete m_rootItem;
-}
-
-QModelIndex FileSystemTreeModel::index(int row, int column, const QModelIndex &parent) const {
-    if (!hasIndex(row, column, parent))
-        return QModelIndex();
-
-    TreeItem *parentItem = getItem(parent);
-    TreeItem *childItem = parentItem->child(row);
-
-    return childItem ? createIndex(row, column, childItem) : QModelIndex();
-}
-
-QModelIndex FileSystemTreeModel::parent(const QModelIndex &index) const {
-    if (!index.isValid())
-        return QModelIndex();
-
-    TreeItem *childItem = getItem(index);
-    TreeItem *parentItem = childItem->parentItem();
-
-    if (parentItem == m_rootItem || !parentItem)
-        return QModelIndex();
-
-    return createIndex(parentItem->row(), 0, parentItem);
-}
-
-int FileSystemTreeModel::rowCount(const QModelIndex &parent) const {
-    if (parent.column() > 0)
-        return 0;
-    return getItem(parent)->childCount();
-}
-
-int FileSystemTreeModel::columnCount(const QModelIndex &parent) const {
-    Q_UNUSED(parent);
-    return 1;
-}
-
-QVariant FileSystemTreeModel::data(const QModelIndex &index, int role) const {
-    if (!index.isValid())
-        return QVariant();
-
-    TreeItem *item = getItem(index);
-    switch (role) {
-    case Qt::DisplayRole:
-        return item->name();
-    case Qt::UserRole + 1: // PathRole
-        return item->path();
-    case Qt::UserRole + 2: // IsDirectoryRole
-        return item->isDirectory();
-    default:
-        return QVariant();
+    FileSystemTreeModel::~FileSystemTreeModel() {
+        delete m_rootItem;
     }
-}
 
-QHash<int, QByteArray> FileSystemTreeModel::roleNames() const {
-    QHash<int, QByteArray> roles;
-    roles[Qt::DisplayRole] = "name";
-    roles[Qt::UserRole + 1] = "path";
-    roles[Qt::UserRole + 2] = "isDirectory";
-    return roles;
-}
+    QModelIndex FileSystemTreeModel::index(int row, int column, const QModelIndex &parent) const {
+        if (!hasIndex(row, column, parent))
+            return QModelIndex();
 
-TreeItem *FileSystemTreeModel::getItem(const QModelIndex &index) const {
-    if (index.isValid()) {
+        TreeItem *parentItem;
+
+        if (!parent.isValid())
+            parentItem = m_rootItem;
+        else
+            parentItem = static_cast<TreeItem*>(parent.internalPointer());
+
+        TreeItem *childItem = parentItem->child(row);
+        if (childItem)
+            return createIndex(row, column, childItem);
+        return QModelIndex();
+    }
+
+    QModelIndex FileSystemTreeModel::parent(const QModelIndex &index) const {
+        if (!index.isValid())
+            return QModelIndex();
+
+        TreeItem *childItem = static_cast<TreeItem*>(index.internalPointer());
+        TreeItem *parentItem = childItem->parentItem();
+
+        if (parentItem == m_rootItem)
+            return QModelIndex();
+
+        return createIndex(parentItem->row(), 0, parentItem);
+    }
+
+    int FileSystemTreeModel::rowCount(const QModelIndex &parent) const {
+
+        TreeItem *parentItem;
+        if (parent.column() > 0)
+            return 0;
+
+        if (!parent.isValid())
+            parentItem = m_rootItem;
+        else
+            parentItem = static_cast<TreeItem*>(parent.internalPointer());
+
+        qDebug() << "[DEBUG] rowCount 被调用 parent:" << parent << " 返回:" << parentItem->childCount();
+        return parentItem->childCount();
+
+    }
+
+    int FileSystemTreeModel::columnCount(const QModelIndex &parent) const {
+        Q_UNUSED(parent);
+        return 1;
+    }
+
+    QVariant FileSystemTreeModel::data(const QModelIndex &index, int role) const {
+        if (!index.isValid())
+            return QVariant();
+
         TreeItem *item = static_cast<TreeItem*>(index.internalPointer());
-        if (item)
-            return item;
+        if (!item) return QVariant();
+        qDebug() << "------------"<<role;
+        switch (role) {
+        case Qt::DisplayRole:
+            return item->name();
+        case Qt::UserRole + 1:  // isTreeNode
+            return item->isDirectory();
+        case Qt::UserRole + 2:  // hasChildren
+            return item->hasChildren();
+        case Qt::UserRole + 3:  // depth
+            return item->depth();
+        case Qt::UserRole + 4:  // row
+            return item->row();
+        case Qt::UserRole + 5:  // column (always 0)
+            return 0;
+        default:
+            return QVariant();
+        }
     }
-    return m_rootItem;
-}
 
-void FileSystemTreeModel::loadDirectory(const QString &path) {
-    beginResetModel();
-    delete m_rootItem;
-    m_rootItem = new TreeItem(QFileInfo(path).fileName(), path, true);
-    scanDirectory(m_rootItem);
-    endResetModel();
-}
+    QHash<int, QByteArray> FileSystemTreeModel::roleNames() const {
+        return {
+            {Qt::DisplayRole, "display"},      // 必须对应QML的model.display
+            {Qt::UserRole + 1, "name"},
+            {Qt::UserRole + 2, "path"},
+            {Qt::UserRole + 3, "isDirectory"},
+            {Qt::UserRole + 4, "hasChildren"},
+            {Qt::UserRole + 5, "depth"}
+        };
+    }
 
-void FileSystemTreeModel::scanDirectory(TreeItem *parent) {
-    QDir dir(parent->path());
-    const auto entries = dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot);
+    bool FileSystemTreeModel::hasChildren(const QModelIndex &parent) const
+    {
+        if (!parent.isValid()) return m_rootItem->childCount() > 0;
 
-    for (const auto &entry : entries) {
-        bool isDir = entry.isDir();
-        if (isDir || entry.suffix().compare("ogpr", Qt::CaseInsensitive) == 0) {
-            TreeItem *child = new TreeItem(
-                entry.fileName(),
-                entry.absoluteFilePath(),
-                isDir,
-                parent
-                );
-            parent->appendChild(child);
-            if (isDir) {
-                scanDirectory(child);
+        TreeItem *item = static_cast<TreeItem*>(parent.internalPointer());
+        return item && item->childCount() > 0;
+    }
+
+    TreeItem *FileSystemTreeModel::getItem(const QModelIndex &index) const {
+        if (index.isValid()) {
+            TreeItem *item = static_cast<TreeItem*>(index.internalPointer());
+            if (item)
+                return item;
+        }
+        return m_rootItem;
+    }
+
+
+    void FileSystemTreeModel::loadDirectory(const QString &path) {
+        // qDebug() << "Loading directory:" << path;
+        // 创建新的文件夹节点
+        TreeItem *newFolder = new TreeItem(QFileInfo(path).fileName(), path, true, m_rootItem);
+
+        // 通知视图开始插入行
+        int rowCount = m_rootItem->childCount();
+        beginInsertRows(createIndex(rowCount, 0, m_rootItem), rowCount, rowCount);
+        m_rootItem->appendChild(newFolder);
+        endInsertRows();
+        qDebug() << "Row count after insert: " << m_rootItem->childCount();
+        // 扫描文件夹内容
+        emit layoutChanged();
+        scanDirectory(newFolder);
+    }
+
+    void FileSystemTreeModel::scanDirectory(TreeItem *parent) {
+        // qDebug() << "Scanning directory:" << parent->path();
+        QDir dir(parent->path());
+        const QFileInfoList entries = dir.entryInfoList(
+            QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot,
+            QDir::DirsFirst
+            );
+
+        for (const QFileInfo &entry : entries) {
+            // qDebug() << "Entry found:" << entry.absoluteFilePath();
+            const bool isDir = entry.isDir();
+            const bool isTargetFile = entry.suffix().compare("ogpr", Qt::CaseInsensitive) == 0;
+
+            if (isDir || isTargetFile) {
+                // 通知视图插入新行
+                const int newRow = parent->childCount();
+                // qDebug() << "Inserting new row at:" << newRow;
+                beginInsertRows(createIndex(parent->row(), 0, parent), newRow, newRow);
+
+                TreeItem *child = new TreeItem(entry.fileName(),
+                                               entry.absoluteFilePath(),
+                                               isDir,
+                                               parent);
+                parent->appendChild(child);
+
+                endInsertRows();
+                // qDebug() << "Inserted child:" << child->name() << "at" << child->path();
+                // 递归扫描子目录
+                if (isDir) {
+                    scanDirectory(child);
+                }
             }
         }
     }
-}
 
-bool FileSystemTreeModel::exportProject(const QString &savePath) {
-    QFile file(savePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qWarning() << "无法打开文件:" << file.errorString();
-        return false;
-    }
+    void FileSystemTreeModel::saveProject(const QString &filePath) {
+        QFile file(filePath);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            qWarning() << "无法保存文件:" << file.errorString();
+            return;
+        }
 
-    QXmlStreamWriter writer(&file);
-    writer.setAutoFormatting(true);
-    writer.setAutoFormattingIndent(4);
-    writer.writeStartDocument("1.0", true); // version 1.0, standalone yes
+        QXmlStreamWriter writer(&file);
+        writer.setAutoFormatting(true);
+        writer.writeStartDocument();
+        writer.writeStartElement("Project");
 
-    writer.writeStartElement("Project");
+        // 遍历所有添加的文件夹
+        for (int i = 0; i < m_rootItem->childCount(); ++i) {
+            TreeItem *folder = m_rootItem->child(i);
 
-    // 使用栈进行非递归遍历
-    QStack<TreeItem*> stack;
-    stack.push(m_rootItem);
-
-    while (!stack.isEmpty()) {
-        TreeItem* current = stack.pop();
-
-        // 只处理目录节点（排除根节点和文件节点）
-        if (current != m_rootItem && current->isDirectory()) {
             writer.writeStartElement("SwathGroup");
-            writer.writeAttribute("name", current->name());
+            writer.writeAttribute("name", folder->name());
             writer.writeAttribute("visible", "1");
 
-            writer.writeStartElement("Folder");
-            writer.writeCharacters(current->path());
-            writer.writeEndElement(); // Folder
+            writer.writeTextElement("Folder", folder->path());
 
             writer.writeEndElement(); // SwathGroup
         }
 
-        // 逆序添加子节点以保持原顺序
-        for (int i = current->childCount() - 1; i >= 0; --i) {
-            stack.push(current->child(i));
-        }
+        writer.writeEndElement(); // Project
+        writer.writeEndDocument();
     }
 
-    writer.writeEndElement(); // Project
-    writer.writeEndDocument();
 
-    file.close();
-    return true;
-}
+    void FileSystemTreeModel::loadProject(const QString &filePath) {
+        beginResetModel();
+        delete m_rootItem;
+        m_rootItem = new TreeItem("Root", "", true);
+
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QXmlStreamReader xml(&file);
+            while (!xml.atEnd()) {
+                if (xml.isStartElement() && xml.name().toString() == "SwathGroup") {
+                    QString folderPath;
+                    while (!(xml.isEndElement() && xml.name().toString() == "SwathGroup")) {
+                        xml.readNext();
+                        if (xml.isStartElement() && xml.name().toString() == "Folder") {
+                            folderPath = xml.readElementText();
+                        }
+                    }
+                    if (!folderPath.isEmpty()) {
+                        loadDirectory(folderPath);
+                    }
+                }
+
+                xml.readNext();
+            }
+        }
+        endResetModel();
+    }
+
