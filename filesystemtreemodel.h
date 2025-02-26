@@ -12,6 +12,17 @@ public:
     explicit FileSystemTreeModel(QObject *parent = nullptr);
     ~FileSystemTreeModel();
 
+    enum Role {
+        DisplayRole = Qt::DisplayRole,
+        NameRole = Qt::UserRole + 1,
+        PathRole = Qt::UserRole + 2,
+        IsDirectoryRole = Qt::UserRole + 3,
+        HasChildrenRole = Qt::UserRole + 4,
+        DepthRole = Qt::UserRole + 5,
+        RowRole = Qt::UserRole + 6,
+        ColumnRole = Qt::UserRole + 7
+    };
+
     // QAbstractItemModel 接口
     QModelIndex index(int row, int column, const QModelIndex &parent) const override;
     QModelIndex parent(const QModelIndex &index) const override;
@@ -20,6 +31,7 @@ public:
     QVariant data(const QModelIndex &index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
     bool hasChildren(const QModelIndex &parent) const override;
+
 
     // 自定义功能
     Q_INVOKABLE void loadDirectory(const QString &path);

@@ -54,7 +54,7 @@
         else
             parentItem = static_cast<TreeItem*>(parent.internalPointer());
 
-        qDebug() << "[DEBUG] rowCount 被调用 parent:" << parent << " 返回:" << parentItem->childCount();
+        // qDebug() << "[DEBUG] rowCount 被调用 parent:" << parent << " 返回:" << parentItem->childCount();
         return parentItem->childCount();
 
     }
@@ -65,25 +65,30 @@
     }
 
     QVariant FileSystemTreeModel::data(const QModelIndex &index, int role) const {
+        // qDebug() << "[DEBUG] data() 被调用，index:" << index << "role:" << role;
         if (!index.isValid())
             return QVariant();
 
         TreeItem *item = static_cast<TreeItem*>(index.internalPointer());
         if (!item) return QVariant();
-        qDebug() << "------------"<<role;
+
         switch (role) {
-        case Qt::DisplayRole:
+        case DisplayRole:
             return item->name();
-        case Qt::UserRole + 1:  // isTreeNode
+        case IsDirectoryRole:
             return item->isDirectory();
-        case Qt::UserRole + 2:  // hasChildren
+        case HasChildrenRole:
             return item->hasChildren();
-        case Qt::UserRole + 3:  // depth
+        case DepthRole:
             return item->depth();
-        case Qt::UserRole + 4:  // row
-            return item->row();
-        case Qt::UserRole + 5:  // column (always 0)
-            return 0;
+        case NameRole:
+            return item->name();  // 可以根据需要返回不同的数据
+        case PathRole:
+            return item->path();  // 可以根据需要返回不同的数据
+        case RowRole:
+            return index.row();
+        case ColumnRole:
+            return index.column();
         default:
             return QVariant();
         }
@@ -91,12 +96,14 @@
 
     QHash<int, QByteArray> FileSystemTreeModel::roleNames() const {
         return {
-            {Qt::DisplayRole, "display"},      // 必须对应QML的model.display
-            {Qt::UserRole + 1, "name"},
-            {Qt::UserRole + 2, "path"},
-            {Qt::UserRole + 3, "isDirectory"},
-            {Qt::UserRole + 4, "hasChildren"},
-            {Qt::UserRole + 5, "depth"}
+            {DisplayRole, "display"},          // 必须对应QML的model.display
+            {NameRole, "name"},
+            {PathRole, "path"},
+            {IsDirectoryRole, "isDirectory"},
+            {HasChildrenRole, "hasChildren"},
+            {DepthRole, "depth"},
+            {RowRole, "row"},
+            {ColumnRole, "column"}
         };
     }
 
@@ -125,13 +132,16 @@
 
         // 通知视图开始插入行
         int rowCount = m_rootItem->childCount();
-        beginInsertRows(createIndex(rowCount, 0, m_rootItem), rowCount, rowCount);
+        // qDebug() << "createIndex(rowCount, 0, m_rootItem): " << createIndex(rowCount, 0, m_rootItem);
+        // qDebug() << "QModelIndex(): " << QModelIndex();
+        beginInsertRows(QModelIndex(), rowCount, rowCount);
         m_rootItem->appendChild(newFolder);
         endInsertRows();
         qDebug() << "Row count after insert: " << m_rootItem->childCount();
         // 扫描文件夹内容
-        emit layoutChanged();
         scanDirectory(newFolder);
+        // QModelIndex newFolderIndex = indexForItem(newFolder);
+        // emit itemAdded(newFolderIndex);
     }
 
     void FileSystemTreeModel::scanDirectory(TreeItem *parent) {
@@ -189,7 +199,9 @@
             writer.writeAttribute("name", folder->name());
             writer.writeAttribute("visible", "1");
 
-            writer.writeTextElement("Folder", folder->path());
+            writer.writeStartElement("Folder");
+            writer.writeCharacters(folder->path());
+            writer.writeEndElement(); // Folder
 
             writer.writeEndElement(); // SwathGroup
         }
