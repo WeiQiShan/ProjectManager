@@ -89,6 +89,8 @@
             return index.row();
         case ColumnRole:
             return index.column();
+        case FileCountRole:
+            return item->childCount();
         default:
             return QVariant();
         }
@@ -103,7 +105,8 @@
             {HasChildrenRole, "hasChildren"},
             {DepthRole, "depth"},
             {RowRole, "row"},
-            {ColumnRole, "column"}
+            {ColumnRole, "column"},
+            {FileCountRole, "fileCount"}
         };
     }
 
@@ -209,6 +212,21 @@
         writer.writeEndElement(); // Project
         writer.writeEndDocument();
     }
+
+    void FileSystemTreeModel::removeItem(const QModelIndex &index) {
+        if (!index.isValid())
+            return;
+
+        TreeItem *itemToRemove = static_cast<TreeItem*>(index.internalPointer());
+        TreeItem *parentItem = itemToRemove->parentItem();
+        if (parentItem) {
+            int row = index.row();
+            beginRemoveRows(index.parent(), row, row);  // 通知模型删除操作
+            parentItem->removeChild(row);
+            endRemoveRows();
+        }
+    }
+
 
 
     void FileSystemTreeModel::loadProject(const QString &filePath) {

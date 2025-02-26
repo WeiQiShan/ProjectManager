@@ -20,7 +20,8 @@ public:
         HasChildrenRole = Qt::UserRole + 4,
         DepthRole = Qt::UserRole + 5,
         RowRole = Qt::UserRole + 6,
-        ColumnRole = Qt::UserRole + 7
+        ColumnRole = Qt::UserRole + 7,
+        FileCountRole = Qt::UserRole + 8
     };
 
     // QAbstractItemModel 接口
@@ -37,8 +38,10 @@ public:
     Q_INVOKABLE void loadDirectory(const QString &path);
     Q_INVOKABLE void loadProject(const QString &filePath);
     Q_INVOKABLE void saveProject(const QString &filePath);
+    Q_INVOKABLE void removeItem(const QModelIndex &index);
 
 private:
+
     void scanDirectory(TreeItem *parent);
     void parseXmlElement(const QXmlStreamReader &xml, TreeItem *parent);
     TreeItem *getItem(const QModelIndex &index) const;

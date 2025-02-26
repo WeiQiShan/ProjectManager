@@ -19,6 +19,7 @@ public:
     int row() const;
     TreeItem *parentItem();
     int depth() const;
+    void removeChild(int position);
 private:
     QList<TreeItem*> m_children;
     TreeItem *m_parent;

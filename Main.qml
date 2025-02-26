@@ -81,15 +81,11 @@ ApplicationWindow {
                 TableView.onReused: if (current)
                                         indicatorAnimation.start()
                 onExpandedChanged: indicator.rotation = expanded ? 90 : 0
+
                 // onExpandedChanged:
                 Rectangle {
                     id: background
                     anchors.fill: parent
-                    // color: treeView.selectionModel.hasSelection
-                    //        && model.path.startsWith(
-                    //            treeView.selectionModel.currentIndex.data(
-                    //                FileSystemTreeModel.PathRole)) ? "lightgray" : "transparent"
-                    // opacity: 1.0
                     color: treeView.selectionModel.currentIndex.row
                            === row ? "lightgray" : "transparent"
                 }
@@ -104,7 +100,7 @@ ApplicationWindow {
                     rotation: treeView.isExpanded(row) ? 90 : 0
                     TapHandler {
                         onSingleTapped: {
-                            onSingleTapped: treeView.toggleExpanded(row)
+                            treeView.toggleExpanded(row)
                         }
                     }
                 }
@@ -115,8 +111,41 @@ ApplicationWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - padding - x
                     clip: true
-                    text: model.display
+                    // text: model.display
+                    text: model.isDirectory ? model.display + "   (" + model.fileCount
+                                              + " files)" : model.display
                     color: "black"
+                }
+
+                MouseArea {
+                    id: mouseArea
+                    anchors.right: parent.right
+                    width: 20 // 仅覆盖按钮区域
+                    height: 20
+                    anchors.verticalCenter: parent.verticalCenter
+                    hoverEnabled: true
+
+                    // 仅控制按钮显隐
+                    onContainsMouseChanged: closeButton.visible = containsMouse
+                                            && model.isDirectory
+                }
+
+                Button {
+                    id: closeButton
+                    text: "×"
+                    visible: false
+                    width: 20
+                    height: 20
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    // 阻止事件冒泡
+                    onClicked: {
+                        if (model.isDirectory) {
+                            const index = treeView.index(row, 0)
+                            fsModel.removeItem(index)
+                        }
+                    }
                 }
 
                 TapHandler {
@@ -153,7 +182,7 @@ ApplicationWindow {
     }
 
     function getLocalPath(url) {
-        console.log(url.toString().replace(/^file:\/{3}/, ""))
+        // console.log(url.toString().replace(/^file:\/{3}/, ""))
         return url.toString().replace(/^file:\/{3}/, "")
     }
 }

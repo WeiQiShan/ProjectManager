@@ -56,3 +56,12 @@ int TreeItem::depth() const
 {
     return m_depth;
 }
+
+void TreeItem::removeChild(int position) {
+    if (position < 0 || position >= m_children.size()) {
+        return;
+    }
+    // 删除子项
+    delete m_children.takeAt(position);
+}
+
