@@ -126,7 +126,7 @@
 
 
     void FileSystemTreeModel::loadDirectory(const QString &path) {
-        // qDebug() << "Loading directory:" << path;
+        qDebug() << "Loading directory:" << path;
         // 创建新的文件夹节点
         TreeItem *newFolder = new TreeItem(QFileInfo(path).fileName(), path, true, m_rootItem);
 
@@ -215,12 +215,26 @@
         beginResetModel();
         delete m_rootItem;
         m_rootItem = new TreeItem("Root", "", true);
-
+        qDebug() << "filePath:" << filePath;
         QFile file(filePath);
+
+        // if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        //     qWarning() << "无法打开文件:" << filePath
+        //                << ", 错误:" << file.errorString()
+        //                << ", 文件是否存在:" << QFile::exists(filePath)
+        //                << ", 权限:" << file.permissions();
+
+        //     // 关键修复：必须结束重置
+        //     endResetModel();
+        //     return;
+        // }
+
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            qDebug() << "打开文件:";
             QXmlStreamReader xml(&file);
             while (!xml.atEnd()) {
                 if (xml.isStartElement() && xml.name().toString() == "SwathGroup") {
+                    qDebug() << "找到SwathGroup";
                     QString folderPath;
                     while (!(xml.isEndElement() && xml.name().toString() == "SwathGroup")) {
                         xml.readNext();
@@ -236,6 +250,7 @@
                 xml.readNext();
             }
         }
+
         endResetModel();
     }
 

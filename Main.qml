@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Qt.labs.platform 1.1
 import SkyProj 1.0
+import QtQuick.Dialogs
 
 ApplicationWindow {
     width: 800
@@ -134,13 +135,13 @@ ApplicationWindow {
 
     FolderDialog {
         id: folderDialog
-        onAccepted: fsModel.loadDirectory(getLocalPath(currentFolder))
+        onAccepted: fsModel.loadDirectory(getLocalPath(selectedFolder))
     }
 
     FileDialog {
         id: projectOpenDialog
         nameFilters: ["SkyProj Files (*.skyproj)"]
-        onAccepted: fsModel.loadProject(selectedFile)
+        onAccepted: fsModel.loadProject(getLocalPath(selectedFile))
     }
 
     FileDialog {
@@ -148,10 +149,11 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: ["SkyProj Files (*.skyproj)"]
         defaultSuffix: "skyproj"
-        onAccepted: fsModel.saveProject(selectedFile)
+        onAccepted: fsModel.saveProject(getLocalPath(selectedFile))
     }
 
     function getLocalPath(url) {
+        console.log(url.toString().replace(/^file:\/{3}/, ""))
         return url.toString().replace(/^file:\/{3}/, "")
     }
 }
